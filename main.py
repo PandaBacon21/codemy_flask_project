@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Flask, render_template, flash, request
+from flask import Flask, render_template, flash, request, redirect, url_for
 from flask_wtf import FlaskForm
 from wtforms import StringField, EmailField, SubmitField, PasswordField, BooleanField, ValidationError
 from wtforms.validators import DataRequired, email_validator, EqualTo, Length
@@ -8,7 +8,6 @@ from wtforms.widgets import TextArea
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import date
 
 app = Flask(__name__)
 #add database
@@ -124,8 +123,8 @@ def sign_up():
     return render_template('sign_up.html', form=form, name=name, our_users=our_users)
 
 
-@app.route('/update/<int:id>/', methods=['GET', 'POST'])
-def update(id): 
+@app.route('/update-user/<int:id>/', methods=['GET', 'POST'])
+def update_user(id): 
     form = UserForm()
     name_to_update = Users.query.get_or_404(id)
     if request.method == 'POST': 
@@ -135,12 +134,12 @@ def update(id):
         try:
             db.session.commit()
             flash('User Updated Successfully!')
-            return render_template('update.html', form=form, name_to_update=name_to_update)
+            return render_template('update_user.html', form=form, name_to_update=name_to_update)
         except:
             flash('Error! There was an issue. Please try again.')
-            return render_template('update.html', form=form, name_to_update=name_to_update)
+            return render_template('update_user.html', form=form, name_to_update=name_to_update)
     else: 
-        return render_template('update.html', form=form, name_to_update=name_to_update, id=id)
+        return render_template('update_user.html', form=form, name_to_update=name_to_update, id=id)
 
 
 @app.route('/delete/<int:id>/')
@@ -183,6 +182,42 @@ def add_post():
 
     # Redirect to webpage
     return render_template('add_post.html', form=form)
+
+
+@app.route('/blog-posts/')
+def blog_posts(): 
+    # Get posts from database
+    posts = Posts.query.order_by(Posts.date_posted)
+    return render_template('blog_posts.html', posts=posts)
+
+
+@app.route('/blog-posts/<int:id>/')
+def post(id): 
+    post = Posts.query.get_or_404(id)
+    return render_template('post.html', post=post)
+
+
+@app.route('/blog-posts/edit/<int:id>/', methods=['GET', 'POST'])
+def edit_post(id):
+    post = Posts.query.get_or_404(id)
+    form = PostForm()
+    if form.validate_on_submit():
+        post.title = form.title.data
+        post.author = form.author.data
+        post.content = form.content.data
+        post.slug = form.slug.data
+
+        db.session.add(post)
+        db.session.commit()
+
+        flash('Post Has Been Udated!')
+
+        return redirect(url_for('post', id=post.id))
+    form.title.data = post.title
+    form.author.data = post.author
+    form.slug.data = post.slug
+    form.content.data = post.content
+    return render_template('edit_post.html', form=form)
 
 
 
