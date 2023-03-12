@@ -1,12 +1,15 @@
 import os
 from datetime import datetime
 from flask import Flask, render_template, flash, request, redirect, url_for
+from flask_wtf import FlaskForm
+from wtforms import StringField, EmailField, SubmitField, PasswordField, BooleanField, ValidationError
+from wtforms.validators import DataRequired, email_validator, EqualTo, Length
+from wtforms.widgets import TextArea
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from forms import LoginForm, PostForm, UserForm, PasswordForm
+
 
 app = Flask(__name__)
 #add database
@@ -19,14 +22,6 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# Flask Login Stuff
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-@login_manager.user_loader
-def load_user(user_id): 
-    return Users.query.get(int(user_id))
 
 # DB Models
 # USERS DATABASE MODEL
@@ -65,6 +60,51 @@ class Posts(db.Model):
     author = db.Column(db.String(255))
     date_posted = db.Column(db.DateTime, default=datetime.utcnow)
     slug = db.Column(db.String(255))
+    
+
+# Flask Login Stuff
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id): 
+    return Users.query.get(int(user_id))
+
+#FORMS
+#create a User Form
+class UserForm(FlaskForm): 
+    name = StringField('Name', validators=[DataRequired()])
+    username = StringField('Username', validators=[DataRequired()])
+    email = EmailField('Email', validators=[DataRequired()])
+    favorite_color = StringField('Favorite Color')
+    password_hash = PasswordField('Password', validators=[DataRequired(), 
+                                                          EqualTo('password_hash2', 
+                                                          message='Passwords Must Match')])
+    password_hash2 = PasswordField('Confirm Password', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+# Create a POST Form
+class PostForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired()])
+    content = StringField('Content', validators=[DataRequired()], widget=TextArea())
+    author = StringField('Author', validators=[DataRequired()])
+    slug = StringField('Slug', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+# Create a login form
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+class PasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired()])
+    password_hash = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField()
 
 
 #ROUTES
@@ -72,10 +112,11 @@ class Posts(db.Model):
 def index():
     return render_template('index.html')
 
-# USER ROUTES
+
 @app.route('/user/<name>/', methods=['GET', 'POST'])
 def user_profile(name):
     return render_template('user_profile.html', name=name)
+
 
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
@@ -94,12 +135,14 @@ def login():
             flash('Wrong Username of Password')    
     return render_template('login.html', form=form)
 
+
 @app.route('/logout/', methods=['GET', 'POST'])
 @login_required
 def logout():
     logout_user()
     flash('You Have Been Logged Out')
     return redirect(url_for('login'))
+
 
 @app.route('/dashboard/', methods=['GET', 'POST'])
 @login_required
@@ -121,6 +164,7 @@ def dashboard():
             return render_template('dashboard.html', form=form, name_to_update=name_to_update)
     else: 
         return render_template('dashboard.html', form=form, name_to_update=name_to_update, id=id)
+
 
 @app.route('/sign-up/', methods=['GET', 'POST'])
 def sign_up(): 
@@ -147,6 +191,7 @@ def sign_up():
     our_users = Users.query.order_by(Users.date_added)
     return render_template('sign_up.html', form=form, name=name, our_users=our_users)
 
+
 @app.route('/update-user/<int:id>/', methods=['GET', 'POST'])
 @login_required
 def update_user(id): 
@@ -167,6 +212,7 @@ def update_user(id):
     else: 
         return render_template('update_user.html', form=form, name_to_update=name_to_update, id=id)
 
+
 @app.route('/delete-user/<int:id>/')
 @login_required
 def delete_user(id):
@@ -185,7 +231,7 @@ def delete_user(id):
         flash('Whoops! There was a problem deleting the user. Please try again.')
         return render_template('sign_up.html', form=form, name=name, our_users=our_users)
 
-# BLOG POST ROUTES
+
 @app.route('/add-post/', methods=['GET', 'POST'])
 @login_required
 def add_post():
@@ -210,6 +256,7 @@ def add_post():
     # Redirect to webpage
     return render_template('add_post.html', form=form)
 
+
 @app.route('/blog-posts/')
 @login_required
 def blog_posts(): 
@@ -217,11 +264,13 @@ def blog_posts():
     posts = Posts.query.order_by(Posts.date_posted)
     return render_template('blog_posts.html', posts=posts)
 
+
 @app.route('/blog-posts/<int:id>/')
 @login_required
 def post(id): 
     post = Posts.query.get_or_404(id)
     return render_template('post.html', post=post)
+
 
 @app.route('/blog-posts/edit/<int:id>/', methods=['GET', 'POST'])
 @login_required
@@ -246,6 +295,7 @@ def edit_post(id):
     form.content.data = post.content
     return render_template('edit_post.html', form=form)
 
+
 @app.route('/blog-post/delete/<int:id>/', methods=['GET', 'POST'])
 @login_required
 def delete_post(id):
@@ -262,6 +312,34 @@ def delete_post(id):
         flash('Something went wrong deleting the post, try again.')
         return redirect(url_for('blog_posts', posts=posts))
 
+
+
+# PASSWORD TEST - Will remove
+@app.route('/test_pw/', methods=['GET', 'POST'])
+def test_pw():
+    email = None
+    password = None
+    pw_to_check = None
+    passed = None
+    form = PasswordForm()
+
+    #validate form
+    if form.validate_on_submit():
+        email = form.email.data
+        password = form.password_hash.data
+        # clear the form data
+        form.email.data = ''
+        form.password_hash.data = ''
+
+        #check user against database by email
+        pw_to_check = Users.query.filter_by(email=email).first()
+        # Check Hashed PW
+        passed = check_password_hash(pw_to_check.password_hash, password)
+
+    return render_template('test_pw.html', email=email, password=password, 
+                           pw_to_check=pw_to_check, passed=passed, form=form)
+
+
 #CUSTOM ERROR PAGES
 #invalid URL
 @app.errorhandler(404)
@@ -272,31 +350,6 @@ def page_not_found(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     return render_template('500.html'), 500
-
-# # PASSWORD TEST - Will remove
-# @app.route('/test_pw/', methods=['GET', 'POST'])
-# def test_pw():
-#     email = None
-#     password = None
-#     pw_to_check = None
-#     passed = None
-#     form = PasswordForm()
-
-#     #validate form
-#     if form.validate_on_submit():
-#         email = form.email.data
-#         password = form.password_hash.data
-#         # clear the form data
-#         form.email.data = ''
-#         form.password_hash.data = ''
-
-#         #check user against database by email
-#         pw_to_check = Users.query.filter_by(email=email).first()
-#         # Check Hashed PW
-#         passed = check_password_hash(pw_to_check.password_hash, password)
-
-#     return render_template('test_pw.html', email=email, password=password, 
-#                            pw_to_check=pw_to_check, passed=passed, form=form)
 
 
 
